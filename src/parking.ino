@@ -60,6 +60,7 @@ pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
 MedianFilter filter = MedianFilter(5, 0);
+int lastCm = 0;
 
 bool useMaxsonar = true;
 int toggleSensor(String x) {
@@ -75,25 +76,24 @@ void setup() {
   maxsonar.init();
 
   Particle.variable("useMaxsonar", useMaxsonar);
+  Particle.variable("lastCm", lastCm);
   Particle.function("toggleSensor", toggleSensor);
 
   delay(50);
 }
 
-int last_cm = 0;
-
 void loop() {
-  float raw_cm = 0;
+  float rawCm = 0;
   if (useMaxsonar) {
-      raw_cm = maxsonar.ping();
+      rawCm = maxsonar.ping();
   } else {
-      raw_cm = sr04.ping();
+      rawCm = sr04.ping();
   }
 
-  int cm = filter.in(raw_cm);
+  int cm = filter.in(rawCm);
 
-  if (cm != last_cm) {
-    last_cm = cm;
+  if (cm != lastCm) {
+    lastCm = cm;
     char cm_string[10];
     itoa(cm, cm_string, 10);
     Particle.publish("distance-changed", cm_string);
