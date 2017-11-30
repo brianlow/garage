@@ -37,6 +37,7 @@
 #include "sr04.h"
 #include "maxsonar.h"
 #include "color.h"
+#include "median_filter.h"
 #include <dotstar.h>
 
 
@@ -45,6 +46,7 @@ int NUMPIXELS = 10;
 int DATAPIN = A5;
 int CLOCKPIN = A3;
 float CM_PER_PIXEL = 2.54;
+byte rgb[3];
 Adafruit_DotStar strip = Adafruit_DotStar(NUMPIXELS, DATAPIN, CLOCKPIN);
 
 // SR04 Sensor
@@ -57,8 +59,7 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-byte rgb[3];
-
+MedianFilter filter = MedianFilter(5, 0);
 
 bool useMaxsonar = true;
 int toggleSensor(String x) {
@@ -67,7 +68,6 @@ int toggleSensor(String x) {
 }
 
 void setup() {
-
   strip.begin();
   strip.show();
 
@@ -80,12 +80,23 @@ void setup() {
   delay(50);
 }
 
+int last_cm = 0;
+
 void loop() {
-  float cm = 0;
+  float raw_cm = 0;
   if (useMaxsonar) {
-      cm = maxsonar.ping();
+      raw_cm = maxsonar.ping();
   } else {
-      cm = sr04.ping();
+      raw_cm = sr04.ping();
+  }
+
+  int cm = filter.in(raw_cm);
+
+  if (cm != last_cm) {
+    last_cm = cm;
+    char cm_string[10];
+    itoa(cm, cm_string, 10);
+    Particle.publish("distance-changed", cm_string);
   }
 
   for (int i = 0; i < NUMPIXELS; i++) {
