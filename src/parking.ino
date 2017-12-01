@@ -37,7 +37,7 @@
 #include "sr04.h"
 #include "maxsonar.h"
 #include "color.h"
-#include "median_filter.h"
+#include "responsive_filter.h"
 #include <dotstar.h>
 
 
@@ -59,10 +59,10 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-MedianFilter filter = MedianFilter(5, 0);
-int lastCm = 0;
+ResponsiveFilter filter = ResponsiveFilter(true);
+int cm = 0;
 
-bool useMaxsonar = true;
+bool useMaxsonar = false;
 int toggleSensor(String x) {
     useMaxsonar = !useMaxsonar;
     return 0;
@@ -76,7 +76,7 @@ void setup() {
   maxsonar.init();
 
   Particle.variable("useMaxsonar", useMaxsonar);
-  Particle.variable("lastCm", lastCm);
+  Particle.variable("cm", cm);
   Particle.function("toggleSensor", toggleSensor);
 
   delay(50);
@@ -90,20 +90,22 @@ void loop() {
       rawCm = sr04.ping();
   }
 
-  int cm = filter.in(rawCm);
+  filter.update(rawCm);
 
-  if (cm != lastCm) {
-    lastCm = cm;
+  if (filter.hasChanged()) {
+    cm = filter.getValue();
+
     char cm_string[10];
     itoa(cm, cm_string, 10);
     Particle.publish("distance-changed", cm_string);
+
+    for (int i = 0; i < NUMPIXELS; i++) {
+      distanceToRgb(cm + (i * CM_PER_PIXEL), rgb);
+      strip.setPixelColor(i, rgb[0], rgb[2], rgb[1]);
+    }
+    strip.show();
   }
 
-  for (int i = 0; i < NUMPIXELS; i++) {
-    distanceToRgb(cm + (i * CM_PER_PIXEL), rgb);
-    strip.setPixelColor(i, rgb[0], rgb[2], rgb[1]);
-  }
-  strip.show();
   delay(50);
 }
 
