@@ -57,7 +57,7 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-MedianFilter filter = MedianFilter(10*3, 0);
+MedianFilter filter = MedianFilter(100, 0);
 int cm = 0;
 int openDoorThreshold = 20;  // distances below this indicate open door
 
