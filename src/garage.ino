@@ -1,3 +1,8 @@
+// variable with open vs closed
+// event when open vs closed changes
+// event when open for 30s, 5min, 1h, every 2 hours
+
+
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
  * Particle - HC-SR04
@@ -36,18 +41,11 @@
 #include "application.h"
 #include "sr04.h"
 #include "maxsonar.h"
-#include "color.h"
-#include "responsive_filter.h"
-#include <dotstar.h>
+#include "median_filter.h"
 
 
-// Led Strip
-int NUMPIXELS = 10;
-int DATAPIN = A5;
-int CLOCKPIN = A3;
-float CM_PER_PIXEL = 2.54;
-byte rgb[3];
-Adafruit_DotStar strip = Adafruit_DotStar(NUMPIXELS, DATAPIN, CLOCKPIN);
+// Onboard Led
+int ONBOARD_LED = D7;
 
 // SR04 Sensor
 pin_t SR04_TRIGGERPIN = D2;
@@ -59,8 +57,14 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-ResponsiveFilter filter = ResponsiveFilter(true);
+MedianFilter filter = MedianFilter(10*3, 0);
 int cm = 0;
+int openDoorThreshold = 20;  // distances below this indicate open door
+
+const int CLOSED = -1;
+const int UNKNOWN = 0;
+const int OPEN = 1;
+int state = UNKNOWN;
 
 bool useMaxsonar = false;
 int toggleSensor(String x) {
@@ -69,60 +73,39 @@ int toggleSensor(String x) {
 }
 
 void setup() {
-  strip.begin();
-  strip.show();
-
   sr04.init();
   maxsonar.init();
 
+  pinMode(ONBOARD_LED, OUTPUT);
+
   Particle.variable("useMaxsonar", useMaxsonar);
   Particle.variable("cm", cm);
+  Particle.variable("state", state);
   Particle.function("toggleSensor", toggleSensor);
 
   delay(50);
 }
 
 void loop() {
-  float rawCm = 0;
-  if (useMaxsonar) {
-      rawCm = maxsonar.ping();
-  } else {
-      rawCm = sr04.ping();
-  }
+  float rawCm = useMaxsonar ? maxsonar.ping() : sr04.ping();
 
-  filter.update(rawCm);
+  cm = filter.in(rawCm);
 
-  if (filter.hasChanged()) {
-    cm = filter.getValue();
+  bool now_open = cm < openDoorThreshold;
 
-    char cm_string[10];
-    itoa(cm, cm_string, 10);
-    Particle.publish("distance-changed", cm_string);
-
-    for (int i = 0; i < NUMPIXELS; i++) {
-      distanceToRgb(cm + (i * CM_PER_PIXEL), rgb);
-      strip.setPixelColor(i, rgb[0], rgb[2], rgb[1]);
+  if (now_open) {
+    if (state == CLOSED) {
+      Particle.publish("door-opened");
     }
-    strip.show();
+    digitalWrite(ONBOARD_LED, HIGH);
+    state = OPEN;
+  } else {
+    if (state == OPEN) {
+      Particle.publish("door-closed");
+    }
+    digitalWrite(ONBOARD_LED, LOW);
+    state = CLOSED;
   }
 
   delay(50);
-}
-
-void distanceToRgb(float cm, byte rgb[]) {
-  float hue = 0.0;
-  float saturation = 1.0;
-  float lightness = 0.01;
-  if (cm < 30) {
-      hue = 0.0/360;
-      lightness = 0.01;
-  }
-  else if (cm < 60) hue = 40.0/360.0;
-  else if (cm < 90) hue = 120.0/360.0;
-  else if (cm < 120) hue = 180.0/360.0;
-  else {
-      saturation = 0;
-      lightness = 0;
-  }
-  hslToRgb(hue, saturation, lightness, rgb);
 }
