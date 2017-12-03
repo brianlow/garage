@@ -1,5 +1,3 @@
-// variable with open vs closed
-// event when open vs closed changes
 // event when open for 30s, 5min, 1h, every 2 hours
 
 
@@ -57,9 +55,11 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-MedianFilter filter = MedianFilter(100, 0);
+const int filterSize = 100;
+MedianFilter filter = MedianFilter(filterSize, 0);
 int cm = 0;
 int openDoorThreshold = 20;  // distances below this indicate open door
+int readings = 0; // number of readings we've taken (only counts up to filterSize)
 
 const int CLOSED = -1;
 const int UNKNOWN = 0;
@@ -77,6 +77,7 @@ void setup() {
   maxsonar.init();
 
   pinMode(ONBOARD_LED, OUTPUT);
+  digitalWrite(ONBOARD_LED, LOW);
 
   Particle.variable("useMaxsonar", useMaxsonar);
   Particle.variable("cm", cm);
@@ -91,15 +92,21 @@ void loop() {
 
   cm = filter.in(rawCm);
 
-  bool now_open = cm < openDoorThreshold;
+  int new_state;
+  if (readings < filterSize) {
+    readings++;
+    new_state = UNKNOWN;
+  } else {
+    new_state = cm < openDoorThreshold ? OPEN : CLOSED;
+  }
 
-  if (now_open) {
+  if (new_state == OPEN) {
     if (state == CLOSED) {
       Particle.publish("door-opened");
     }
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
-  } else {
+  } else if (new_state == CLOSED) {
     if (state == OPEN) {
       Particle.publish("door-closed");
     }
