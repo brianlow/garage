@@ -40,7 +40,10 @@
 #include "sr04.h"
 #include "maxsonar.h"
 #include "median_filter.h"
+#include <blynk.h>
 
+// Blynk
+char auth[] = "82e05781d4ad49c9babe4eebf5565640";
 
 // Onboard Led
 int ONBOARD_LED = D7;
@@ -72,6 +75,9 @@ int toggleSensor(String x) {
     return 0;
 }
 
+BlynkTimer timer;
+int lastReportedCm = 0;
+
 void setup() {
   sr04.init();
   maxsonar.init();
@@ -84,7 +90,12 @@ void setup() {
   Particle.variable("state", state);
   Particle.function("toggleSensor", toggleSensor);
 
-  delay(50);
+  delay(250);
+
+  Blynk.begin(auth);
+  Blynk.virtualWrite(V1, "Not sure");
+
+  timer.setInterval(500L, reportCm);
 }
 
 void loop() {
@@ -103,16 +114,34 @@ void loop() {
   if (new_state == OPEN) {
     if (state == CLOSED) {
       Particle.publish("door-opened");
+      // Blynk.notify("Garage door opened");
+    }
+    if (state == CLOSED || state == UNKNOWN) {
+      Blynk.virtualWrite(V1, "Open");
     }
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
       Particle.publish("door-closed");
+      // Blynk.notify("Garage door closed");
+    }
+    if (state == CLOSED || state == UNKNOWN) {
+      Blynk.virtualWrite(V1, "Closed");
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
   }
 
+  timer.run();
+  Blynk.run();
+
   delay(50);
+}
+
+void reportCm() {
+  if (cm != lastReportedCm) {
+    Blynk.virtualWrite(V0, cm);
+    lastReportedCm = cm;
+  }
 }
