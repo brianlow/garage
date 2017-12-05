@@ -1,5 +1,6 @@
 // event when open for 30s, 5min, 1h, every 2 hours
-
+// Blynk - colorize door status
+// Blynk - table with recently opened times (and durations)
 
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
@@ -77,6 +78,9 @@ int toggleSensor(String x) {
 
 BlynkTimer timer;
 int lastReportedCm = 0;
+char stateStr[50] = "";
+char lastReportedStateStr[50] = "";
+unsigned long openSince;
 
 void setup() {
   sr04.init();
@@ -93,9 +97,8 @@ void setup() {
   delay(250);
 
   Blynk.begin(auth);
-  Blynk.virtualWrite(V1, "Not sure");
 
-  timer.setInterval(500L, reportCm);
+  timer.setInterval(500L, report);
 }
 
 void loop() {
@@ -114,20 +117,15 @@ void loop() {
   if (new_state == OPEN) {
     if (state == CLOSED) {
       Particle.publish("door-opened");
-      // Blynk.notify("Garage door opened");
     }
-    if (state == CLOSED || state == UNKNOWN) {
-      Blynk.virtualWrite(V1, "Open");
+    if (state != OPEN) {
+      openSince = millis();
     }
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
       Particle.publish("door-closed");
-      // Blynk.notify("Garage door closed");
-    }
-    if (state == CLOSED || state == UNKNOWN) {
-      Blynk.virtualWrite(V1, "Closed");
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
@@ -139,9 +137,34 @@ void loop() {
   delay(50);
 }
 
-void reportCm() {
+void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
     lastReportedCm = cm;
+  }
+
+  calcStateStr();
+  if (strcmp(stateStr, lastReportedStateStr) != 0) {
+    Blynk.virtualWrite(V1, stateStr);
+    strcpy(lastReportedStateStr, stateStr);
+  }
+}
+
+void calcStateStr() {
+  if (state == CLOSED) {
+    strcpy(stateStr, "Closed");
+  } else if (state == OPEN) {
+    unsigned long seconds = (millis() - openSince) / 1000;
+    unsigned long minutes = seconds / 60;
+    unsigned long hours = minutes / 60;
+    if (seconds < 60) {
+      sprintf(stateStr, "Open for %d second%s", seconds, (seconds==1 ? "" : "s"));
+    } else if (minutes < 60) {
+      sprintf(stateStr, "Open for %d minute%s", minutes, (minutes==1 ? "" : "s"));
+    } else {
+      sprintf(stateStr, "Open for %d hour%s", hours, (hours==1 ? "" : "s"));
+    }
+  } else {
+    strcpy(stateStr, "Not sure");
   }
 }
