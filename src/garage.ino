@@ -45,6 +45,7 @@
 
 // Blynk
 char auth[] = "82e05781d4ad49c9babe4eebf5565640";
+WidgetTerminal terminal(V2);
 
 // Onboard Led
 int ONBOARD_LED = D7;
@@ -76,11 +77,15 @@ int toggleSensor(String x) {
     return 0;
 }
 
-BlynkTimer timer;
+BlynkTimer timers;
 int lastReportedCm = 0;
 char stateStr[50] = "";
 char lastReportedStateStr[50] = "";
 unsigned long openSince;
+int notificationTimer = -1;  // timer id to be used with BlynkTimer
+const int NOTIFICATIONS_LENGTH = 4;
+unsigned long notifications[NOTIFICATIONS_LENGTH] = {5, 15, 30, 60};
+int notificationIndex = 0; // index into above array indicating current timeout
 
 void setup() {
   sr04.init();
@@ -98,7 +103,7 @@ void setup() {
 
   Blynk.begin(auth);
 
-  timer.setInterval(500L, report);
+  timers.setInterval(500L, report);
 }
 
 void loop() {
@@ -120,6 +125,8 @@ void loop() {
     }
     if (state != OPEN) {
       openSince = millis();
+      notificationIndex = 0;
+      notificationTimer = timers.setTimeout(notifications[0] * 1000, notify);
     }
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
@@ -129,9 +136,10 @@ void loop() {
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
+    if (notificationTimer >= 0) timers.deleteTimer(notificationTimer);
   }
 
-  timer.run();
+  timers.run();
   Blynk.run();
 
   delay(50);
@@ -167,4 +175,20 @@ void calcStateStr() {
   } else {
     strcpy(stateStr, "Not sure");
   }
+}
+
+void notify() {
+  int seconds = (millis() - openSince) / 1000;
+  // TODO: humanize
+  // TODO: send generic pushover-push event
+  Particle.publish("door-open", String(seconds));
+
+  unsigned long duration;
+  if (notificationIndex + 1 == NOTIFICATIONS_LENGTH) {
+    duration = notifications[NOTIFICATIONS_LENGTH-1];
+  } else {
+    notificationIndex++;
+    duration = notifications[notificationIndex] - notifications[notificationIndex-1];
+  }
+  notificationTimer = timers.setTimeout(duration * 1000, notify);
 }
