@@ -42,6 +42,7 @@
 #include "maxsonar.h"
 #include "median_filter.h"
 #include <blynk.h>
+#include <MQTT.h>
 
 // Blynk
 char auth[] = "82e05781d4ad49c9babe4eebf5565640";
@@ -88,6 +89,12 @@ unsigned long notifications[NOTIFICATIONS_LENGTH] = {5, 15, 30, 60};
 int notificationPriority[NOTIFICATIONS_LENGTH] = {0, 0, 1, 1};
 int notificationIndex = 0; // index into above array indicating current timeout
 
+void mqtt_receive(char* topic, byte* payload, unsigned int length);
+void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
+// byte mqttServer[] = {192,168,1,95};
+// MQTT mqtt(mqttServer, 1883, mqtt_receive);
+MQTT mqtt("nas", 1883, mqtt_receive);
+
 void setup() {
   sr04.init();
   maxsonar.init();
@@ -103,6 +110,11 @@ void setup() {
   delay(250);
 
   Blynk.begin(auth);
+
+  mqtt.connect("photon1_" + String(Time.now()));
+  if (mqtt.isConnected()) {
+    mqtt.publish("/photon1","hello world 3");
+  }
 
   timers.setInterval(500L, report);
 }
