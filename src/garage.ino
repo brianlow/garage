@@ -1,4 +1,4 @@
-// event when open for 30s, 5min, 1h, every 2 hours
+// event when open for 30s, 5min, 30min, 1h, every 2 hours
 // Blynk - colorize door status
 // Blynk - table with recently opened times (and durations)
 
@@ -85,6 +85,7 @@ unsigned long openSince;
 int notificationTimer = -1;  // timer id to be used with BlynkTimer
 const int NOTIFICATIONS_LENGTH = 4;
 unsigned long notifications[NOTIFICATIONS_LENGTH] = {5, 15, 30, 60};
+int notificationPriority[NOTIFICATIONS_LENGTH] = {0, 0, 1, 1};
 int notificationIndex = 0; // index into above array indicating current timeout
 
 void setup() {
@@ -121,7 +122,7 @@ void loop() {
 
   if (new_state == OPEN) {
     if (state == CLOSED) {
-      Particle.publish("door-opened");
+      pushoverPush("Garage door opened", 0);
     }
     if (state != OPEN) {
       openSince = millis();
@@ -132,7 +133,7 @@ void loop() {
     state = OPEN;
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
-      Particle.publish("door-closed");
+      pushoverPush("Garage door closed", -1);
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
@@ -178,10 +179,8 @@ void calcStateStr() {
 }
 
 void notify() {
-  int seconds = (millis() - openSince) / 1000;
-  // TODO: humanize
-  // TODO: send generic pushover-push event
-  Particle.publish("door-open", String(seconds));
+  calcStateStr();
+  pushoverPush(stateStr, notificationPriority[notificationIndex]);
 
   unsigned long duration;
   if (notificationIndex + 1 == NOTIFICATIONS_LENGTH) {
@@ -191,4 +190,10 @@ void notify() {
     duration = notifications[notificationIndex] - notifications[notificationIndex-1];
   }
   notificationTimer = timers.setTimeout(duration * 1000, notify);
+}
+
+void pushoverPush(char* message, int priority) {
+  char data[100];
+  sprintf(data, "{\"message\":\"%s\", \"priority\": %d}", message, priority);
+  Particle.publish("pushover-push", data);
 }
