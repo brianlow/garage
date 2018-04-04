@@ -41,11 +41,12 @@
 #include "sr04.h"
 #include "maxsonar.h"
 #include "median_filter.h"
+#include "secrets.h"
 #include <blynk.h>
 #include <MQTT.h>
 
 // Blynk
-char auth[] = "82e05781d4ad49c9babe4eebf5565640";
+char auth[] = BLYNK_AUTH;
 WidgetTerminal terminal(V2);
 
 // Onboard Led
@@ -80,6 +81,7 @@ int toggleSensor(String x) {
 
 BlynkTimer timers;
 int lastReportedCm = 0;
+char lastReportedCmStr[25] = "";
 char stateStr[50] = "";
 char lastReportedStateStr[50] = "";
 unsigned long openSince;
@@ -93,7 +95,7 @@ void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 // byte mqttServer[] = {192,168,1,95};
 // MQTT mqtt(mqttServer, 1883, mqtt_receive);
-MQTT mqtt("nas", 1883, mqtt_receive);
+MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
 void setup() {
   sr04.init();
@@ -113,7 +115,7 @@ void setup() {
 
   mqtt.connect("photon1_" + String(Time.now()));
   if (mqtt.isConnected()) {
-    mqtt.publish("/photon1","hello world 3");
+    mqtt.publish("/garagedoor/sensor","connected");
   }
 
   timers.setInterval(500L, report);
@@ -135,6 +137,9 @@ void loop() {
   if (new_state == OPEN) {
     if (state == CLOSED) {
       pushoverPush("Garage door opened", 0);
+      if (mqtt.isConnected()) {
+        mqtt.publish("/garagedoor/state","open");
+      }
     }
     if (state != OPEN) {
       openSince = millis();
@@ -146,6 +151,9 @@ void loop() {
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
       pushoverPush("Garage door closed", -1);
+      if (mqtt.isConnected()) {
+        mqtt.publish("/garagedoor/state","closed");
+      }
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
@@ -161,6 +169,10 @@ void loop() {
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
+    if (mqtt.isConnected()) {
+      sprintf(lastReportedCmStr, "%d", cm);
+      mqtt.publish("/garagedoor/distance", lastReportedCmStr);
+    }
     lastReportedCm = cm;
   }
 
