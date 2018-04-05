@@ -1,6 +1,9 @@
-// event when open for 30s, 5min, 30min, 1h, every 2 hours
-// Blynk - colorize door status
-// Blynk - table with recently opened times (and durations)
+// update HA with new mqtt topics
+// mqtt connection lost after a while
+// send retain mode messages
+// send last will message when offline
+// add 2nd parking sensor
+
 
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
@@ -93,8 +96,6 @@ int notificationIndex = 0; // index into above array indicating current timeout
 
 void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
-// byte mqttServer[] = {192,168,1,95};
-// MQTT mqtt(mqttServer, 1883, mqtt_receive);
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
 void setup() {
@@ -115,7 +116,7 @@ void setup() {
 
   mqtt.connect("photon1_" + String(Time.now()));
   if (mqtt.isConnected()) {
-    mqtt.publish("/garagedoor/sensor","connected");
+    mqtt.publish("/garage/door/sensor","connected");
   }
 
   timers.setInterval(500L, report);
@@ -138,7 +139,7 @@ void loop() {
     if (state == CLOSED) {
       pushoverPush("Garage door opened", 0);
       if (mqtt.isConnected()) {
-        mqtt.publish("/garagedoor/state","open");
+        mqtt.publish("/garage/door/state","open");
       }
     }
     if (state != OPEN) {
@@ -152,7 +153,7 @@ void loop() {
     if (state == OPEN) {
       pushoverPush("Garage door closed", -1);
       if (mqtt.isConnected()) {
-        mqtt.publish("/garagedoor/state","closed");
+        mqtt.publish("/garage/door/state","closed");
       }
     }
     digitalWrite(ONBOARD_LED, LOW);
@@ -171,7 +172,7 @@ void report() {
     Blynk.virtualWrite(V0, cm);
     if (mqtt.isConnected()) {
       sprintf(lastReportedCmStr, "%d", cm);
-      mqtt.publish("/garagedoor/distance", lastReportedCmStr);
+      mqtt.publish("/garage/door/distance", lastReportedCmStr);
     }
     lastReportedCm = cm;
   }
