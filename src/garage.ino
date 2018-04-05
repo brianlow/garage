@@ -1,4 +1,6 @@
 // update HA with new mqtt topics
+// HA with SSL
+// move notifications into HA
 // mqtt connection lost after a while
 // send retain mode messages
 // send last will message when offline
@@ -98,6 +100,12 @@ void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
+void mqtt_pub(char* topic, char* message, bool retain = false) {
+  if (mqtt.isConnected()) {
+    mqtt.publish(topic, (uint8_t*)message, strlen(message), retain);
+  }
+}
+
 void setup() {
   sr04.init();
   maxsonar.init();
@@ -114,10 +122,8 @@ void setup() {
 
   Blynk.begin(auth);
 
-  mqtt.connect("photon1_" + String(Time.now()));
-  if (mqtt.isConnected()) {
-    mqtt.publish("/garage/door/sensor","connected");
-  }
+  mqtt.connect("photon1_" + String(Time.now()), NULL, NULL, "garage/door/sensor", MQTT::QOS0, true, "offline", true);
+  mqtt_pub("garage/door/sensor", "online", true);
 
   timers.setInterval(500L, report);
 }
@@ -137,9 +143,7 @@ void loop() {
 
   if (new_state == OPEN) {
     if (state == CLOSED) {
-      if (mqtt.isConnected()) {
-        mqtt.publish("/garage/door/state","open");
-      }
+      mqtt_pub("garage/door/state", "open", true);
     }
     if (state != OPEN) {
       openSince = millis();
@@ -150,9 +154,7 @@ void loop() {
     state = OPEN;
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
-      if (mqtt.isConnected()) {
-        mqtt.publish("/garage/door/state","closed");
-      }
+      mqtt_pub("garage/door/state", "closed", true);
     }
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
@@ -168,10 +170,8 @@ void loop() {
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
-    if (mqtt.isConnected()) {
-      sprintf(lastReportedCmStr, "%d", cm);
-      mqtt.publish("/garage/door/distance", lastReportedCmStr);
-    }
+    sprintf(lastReportedCmStr, "%d", cm);
+    mqtt_pub("garage/door/distance", lastReportedCmStr, true);
     lastReportedCm = cm;
   }
 
