@@ -137,7 +137,6 @@ void loop() {
 
   if (new_state == OPEN) {
     if (state == CLOSED) {
-      pushoverPush("Garage door opened", 0);
       if (mqtt.isConnected()) {
         mqtt.publish("/garage/door/state","open");
       }
@@ -151,7 +150,6 @@ void loop() {
     state = OPEN;
   } else if (new_state == CLOSED) {
     if (state == OPEN) {
-      pushoverPush("Garage door closed", -1);
       if (mqtt.isConnected()) {
         mqtt.publish("/garage/door/state","closed");
       }
@@ -205,7 +203,6 @@ void calcStateStr() {
 
 void notify() {
   calcStateStr();
-  pushoverPush(stateStr, notificationPriority[notificationIndex]);
 
   unsigned long duration;
   if (notificationIndex + 1 == NOTIFICATIONS_LENGTH) {
@@ -215,10 +212,4 @@ void notify() {
     duration = notifications[notificationIndex] - notifications[notificationIndex-1];
   }
   notificationTimer = timers.setTimeout(duration * 1000, notify);
-}
-
-void pushoverPush(char* message, int priority) {
-  char data[100];
-  sprintf(data, "{\"message\":\"%s\", \"priority\": %d}", message, priority);
-  Particle.publish("pushover-push", data);
 }
