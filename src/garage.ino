@@ -102,7 +102,6 @@ void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
 void mqtt_connect(String name, String willTopic, String willMessage) {
-  // unique_name = name + "_" + String(Time.now())
   mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
 }
 
@@ -203,30 +202,5 @@ void report() {
     Blynk.virtualWrite(V0, cm);
     mqtt_pub("home/sensor/parking1_distance/state", cm);
     lastReportedCm = cm;
-  }
-
-  calcStateStr();
-  if (strcmp(stateStr, lastReportedStateStr) != 0) {
-    Blynk.virtualWrite(V1, stateStr);
-    strcpy(lastReportedStateStr, stateStr);
-  }
-}
-
-void calcStateStr() {
-  if (state == CLOSED) {
-    strcpy(stateStr, "Closed");
-  } else if (state == OPEN) {
-    unsigned long seconds = (millis() - openSince) / 1000;
-    unsigned long minutes = seconds / 60;
-    unsigned long hours = minutes / 60;
-    if (seconds < 60) {
-      sprintf(stateStr, "Open for %d second%s", seconds, (seconds==1 ? "" : "s"));
-    } else if (minutes < 60) {
-      sprintf(stateStr, "Open for %d minute%s", minutes, (minutes==1 ? "" : "s"));
-    } else {
-      sprintf(stateStr, "Open for %d hour%s", hours, (hours==1 ? "" : "s"));
-    }
-  } else {
-    strcpy(stateStr, "Not sure");
   }
 }
