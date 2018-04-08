@@ -9,37 +9,11 @@
  *      VIN - VCC
  *       D2 - TRIG
  *       D6 - ECHO
- *
- * Sparkfun Level Shifter
- * ----------------------
- * Particle - Sparkfun Level Shifter
- *      GND - HI GND
- *      GND - LO GND
- *      VIN - HI
- *      3v3 - LO
-
- * Sparkfun APA102 Led Strip
- * -------------------------
- * Particle - Sparkfun APA102 Led Strip
- *      VIN - VCC
- *      GND - GND
- *       A5 - Level Shifter LO1 - HI1 - 400 ohm resistor - Data
- *       A3 - Level Shifter LO2 - HI2 - Clock
- *
- * Maxbotics LV-MaxSonar-EZ1
- * -------------------------
- * Particle - MaxBotix Sensor
- *      VIN - BW (Pin 1)
- *       D1 - Level Shifter LO4 - HI4 - PW (Pin 2)
- *       D0 - Level Shifter L03 - HI3 - RX (Pin 4)
- *      VIN - +5V
- *      GND - GND
- *
+ * *
  */
 
 #include "application.h"
 #include "sr04.h"
-#include "maxsonar.h"
 #include "median_filter.h"
 #include "secrets.h"
 #include <blynk.h>
@@ -57,11 +31,6 @@ pin_t SR04_TRIGGERPIN = D2;
 pin_t SR04_ECHOPIN = D6;
 SR04 sr04 = SR04(SR04_TRIGGERPIN, SR04_ECHOPIN);
 
-// LV-MaxSonar-EZ1
-pin_t MAXSONAR_TRIGGERPIN = D0;
-pin_t MAXSONAR_ECHOPIN = D1;
-Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
-
 const int filterSize = 25;
 MedianFilter filter = MedianFilter(filterSize, 0);
 int cm = 0;
@@ -77,12 +46,6 @@ int state = UNKNOWN;
 const int EMPTY = -1;
 const int OCCUPIED = 1;
 int parking_state = UNKNOWN;
-
-bool useMaxsonar = false;
-int toggleSensor(String x) {
-    useMaxsonar = !useMaxsonar;
-    return 0;
-}
 
 int lastReportedCm = 0;
 char stringBuffer[25] = "";
@@ -120,15 +83,12 @@ void mqtt_pub(char* topic, int) {
 
 void setup() {
   sr04.init();
-  maxsonar.init();
 
   pinMode(ONBOARD_LED, OUTPUT);
   digitalWrite(ONBOARD_LED, LOW);
 
-  Particle.variable("useMaxsonar", useMaxsonar);
   Particle.variable("cm", cm);
   Particle.variable("state", state);
-  Particle.function("toggleSensor", toggleSensor);
 
   delay(250);
 
@@ -165,7 +125,7 @@ void loop() {
 }
 
 void measure() {
-  float rawCm = useMaxsonar ? maxsonar.ping() : sr04.ping();
+  float rawCm = sr04.ping();
 
   cm = filter.in(rawCm);
 }
