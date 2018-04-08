@@ -66,12 +66,17 @@ const int filterSize = 25;
 MedianFilter filter = MedianFilter(filterSize, 0);
 int cm = 0;
 int openDoorThreshold = 20;  // distances below this indicate open door
+int parkingOccupiedThreshold = 260; // distance below this indicates car is present
 int readings = 0; // number of readings we've taken (only counts up to filterSize)
 
 const int CLOSED = -1;
 const int UNKNOWN = 0;
 const int OPEN = 1;
 int state = UNKNOWN;
+
+const int EMPTY = -1;
+const int OCCUPIED = 1;
+int parking_state = UNKNOWN;
 
 bool useMaxsonar = false;
 int toggleSensor(String x) {
@@ -81,9 +86,6 @@ int toggleSensor(String x) {
 
 int lastReportedCm = 0;
 char stringBuffer[25] = "";
-char stateStr[50] = "";
-char lastReportedStateStr[50] = "";
-unsigned long openSince;
 
 bool measureFlag;
 void setMeasureFlag() {
@@ -135,26 +137,14 @@ void setup() {
   mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
 
   mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-  mqtt_pub("home/sensor/parking1_distance/config", "{\"name\": \"parking1_distance\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-  mqtt_pub("home/binary_sensor/parking1/config", "{\"name\": \"parking1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+  mqtt_pub("home/sensor/stall1/config", "{\"name\": \"stall1\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+  mqtt_pub("home/binary_sensor/stall1/config", "{\"name\": \"stall1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
 
   mqtt_pub("home/device/photon_garage/available", "online");
 
   measureTimer.start();
   reportTimer.start();
 }
-
-// home/device/photon_garage/available
-
-// home/cover/garage_door/config {"name": "garage_door", "availability_topic": "home/device/photon_garage/available"}
-// home/cover/garage_door/state open|closed
-
-// home/sensor/parking1_distance/config {"name": "Vincci's Parking Spot Distance", "unit_of_measurement": "cm", "availability_topic": "home/device/photon_garage/available"}
-// home/sensor/parking1_distance/state 55
-
-// home/binary_sensor/parking1/config {"name": "Vincci's Parking Spot", "device_class":"occupancy", "icon": "mdi:car", "availability_topic": "home/device/photon_garage/available"}
-// home/binary_sensor/parking1/state on|off
-
 
 void loop() {
 
@@ -164,6 +154,8 @@ void loop() {
   if (measureFlag) {
     measureFlag = false;
     measure();
+    calculate_door();
+    calculate_parking();
   }
 
   if (reportFlag) {
@@ -176,7 +168,9 @@ void measure() {
   float rawCm = useMaxsonar ? maxsonar.ping() : sr04.ping();
 
   cm = filter.in(rawCm);
+}
 
+void calculate_door() {
   int new_state;
   if (readings < filterSize) {
     readings++;
@@ -187,7 +181,6 @@ void measure() {
 
   if (new_state == OPEN && state != OPEN) {
     mqtt_pub("home/cover/garage_door/state", "open");
-    openSince = millis();
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
   } else if (new_state == CLOSED && state != CLOSED) {
@@ -197,10 +190,28 @@ void measure() {
   }
 }
 
+void calculate_parking() {
+  int new_state;
+  if (readings < filterSize || state == OPEN) {
+    readings++;
+    new_state = UNKNOWN;
+  } else {
+    new_state = cm < parkingOccupiedThreshold ? OCCUPIED : EMPTY;
+  }
+
+  if (new_state == OCCUPIED && parking_state != OCCUPIED) {
+    mqtt_pub("home/binary_sensor/stall1/state", "ON");
+    parking_state = OPEN;
+  } else if (new_state == EMPTY && parking_state != EMPTY) {
+    mqtt_pub("home/binary_sensor/stall1/state", "OFF");
+    parking_state = CLOSED;
+  }
+}
+
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
-    mqtt_pub("home/sensor/parking1_distance/state", cm);
+    mqtt_pub("home/sensor/stall1/state", cm);
     lastReportedCm = cm;
   }
 }
