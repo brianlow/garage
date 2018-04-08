@@ -1,9 +1,4 @@
-// update HA with new mqtt topics
 // HA with SSL
-// move notifications into HA
-// mqtt connection lost after a while
-// send retain mode messages
-// send last will message when offline
 // add 2nd parking sensor
 
 
@@ -84,17 +79,11 @@ int toggleSensor(String x) {
     return 0;
 }
 
-BlynkTimer timers;
 int lastReportedCm = 0;
-char lastReportedCmStr[25] = "";
+char stringBuffer[25] = "";
 char stateStr[50] = "";
 char lastReportedStateStr[50] = "";
 unsigned long openSince;
-int notificationTimer = -1;  // timer id to be used with BlynkTimer
-const int NOTIFICATIONS_LENGTH = 4;
-unsigned long notifications[NOTIFICATIONS_LENGTH] = {5, 15, 30, 60};
-int notificationPriority[NOTIFICATIONS_LENGTH] = {0, 0, 1, 1};
-int notificationIndex = 0; // index into above array indicating current timeout
 
 bool measureFlag;
 void setMeasureFlag() {
@@ -123,6 +112,10 @@ void mqtt_pub(char* topic, char* message) {
     mqtt.publish(topic, (uint8_t*)message, strlen(message), retain);
   }
 }
+void mqtt_pub(char* topic, int) {
+  sprintf(stringBuffer, "%d", cm);
+  mqtt_pub(topic, stringBuffer);
+}
 
 void setup() {
   sr04.init();
@@ -143,14 +136,12 @@ void setup() {
   mqtt_connect("photon1", "garage/door/sensor", "offline");
   mqtt_pub("garage/door/sensor", "online");
 
-  // timers.setInterval(500L, report);
   measureTimer.start();
   reportTimer.start();
 }
 
 void loop() {
 
-  timers.run();
   Blynk.run();
   mqtt.loop();
 
@@ -181,24 +172,19 @@ void measure() {
   if (new_state == OPEN && state != OPEN) {
     mqtt_pub("garage/door/state", "open");
     openSince = millis();
-    notificationIndex = 0;
-    notificationTimer = timers.setTimeout(notifications[0] * 1000, notify);
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
   } else if (new_state == CLOSED && state != CLOSED) {
     mqtt_pub("garage/door/state", "closed");
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
-    if (notificationTimer >= 0) timers.deleteTimer(notificationTimer);
   }
-
 }
 
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
-    sprintf(lastReportedCmStr, "%d", cm);
-    mqtt_pub("garage/door/distance", lastReportedCmStr);
+    mqtt_pub("garage/door/distance", cm);
     lastReportedCm = cm;
   }
 
@@ -226,17 +212,4 @@ void calcStateStr() {
   } else {
     strcpy(stateStr, "Not sure");
   }
-}
-
-void notify() {
-  calcStateStr();
-
-  unsigned long duration;
-  if (notificationIndex + 1 == NOTIFICATIONS_LENGTH) {
-    duration = notifications[NOTIFICATIONS_LENGTH-1];
-  } else {
-    notificationIndex++;
-    duration = notifications[notificationIndex] - notifications[notificationIndex-1];
-  }
-  notificationTimer = timers.setTimeout(duration * 1000, notify);
 }
