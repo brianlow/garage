@@ -96,11 +96,29 @@ unsigned long notifications[NOTIFICATIONS_LENGTH] = {5, 15, 30, 60};
 int notificationPriority[NOTIFICATIONS_LENGTH] = {0, 0, 1, 1};
 int notificationIndex = 0; // index into above array indicating current timeout
 
+bool measureFlag;
+void setMeasureFlag() {
+  measureFlag = true;
+}
+Timer measureTimer(50, setMeasureFlag);
+
+bool reportFlag;
+void setReportFlag() {
+  reportFlag = true;
+}
+Timer reportTimer(500L, setReportFlag);
+
 void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
-void mqtt_pub(char* topic, char* message, bool retain = false) {
+void mqtt_connect(String name, String willTopic, String willMessage) {
+  // unique_name = name + "_" + String(Time.now())
+  mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
+}
+
+void mqtt_pub(char* topic, char* message) {
+  bool retain = true;
   if (mqtt.isConnected()) {
     mqtt.publish(topic, (uint8_t*)message, strlen(message), retain);
   }
@@ -122,13 +140,32 @@ void setup() {
 
   Blynk.begin(auth);
 
-  mqtt.connect("photon1_" + String(Time.now()), NULL, NULL, "garage/door/sensor", MQTT::QOS0, true, "offline", true);
-  mqtt_pub("garage/door/sensor", "online", true);
+  mqtt_connect("photon1", "garage/door/sensor", "offline");
+  mqtt_pub("garage/door/sensor", "online");
 
-  timers.setInterval(500L, report);
+  // timers.setInterval(500L, report);
+  measureTimer.start();
+  reportTimer.start();
 }
 
 void loop() {
+
+  timers.run();
+  Blynk.run();
+  mqtt.loop();
+
+  if (measureFlag) {
+    measureFlag = false;
+    measure();
+  }
+
+  if (reportFlag) {
+    reportFlag = false;
+    report();
+  }
+}
+
+void measure() {
   float rawCm = useMaxsonar ? maxsonar.ping() : sr04.ping();
 
   cm = filter.in(rawCm);
@@ -141,37 +178,27 @@ void loop() {
     new_state = cm < openDoorThreshold ? OPEN : CLOSED;
   }
 
-  if (new_state == OPEN) {
-    if (state == CLOSED) {
-      mqtt_pub("garage/door/state", "open", true);
-    }
-    if (state != OPEN) {
-      openSince = millis();
-      notificationIndex = 0;
-      notificationTimer = timers.setTimeout(notifications[0] * 1000, notify);
-    }
+  if (new_state == OPEN && state != OPEN) {
+    mqtt_pub("garage/door/state", "open");
+    openSince = millis();
+    notificationIndex = 0;
+    notificationTimer = timers.setTimeout(notifications[0] * 1000, notify);
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
-  } else if (new_state == CLOSED) {
-    if (state == OPEN) {
-      mqtt_pub("garage/door/state", "closed", true);
-    }
+  } else if (new_state == CLOSED && state != CLOSED) {
+    mqtt_pub("garage/door/state", "closed");
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
     if (notificationTimer >= 0) timers.deleteTimer(notificationTimer);
   }
 
-  timers.run();
-  Blynk.run();
-
-  delay(50);
 }
 
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
     sprintf(lastReportedCmStr, "%d", cm);
-    mqtt_pub("garage/door/distance", lastReportedCmStr, true);
+    mqtt_pub("garage/door/distance", lastReportedCmStr);
     lastReportedCm = cm;
   }
 
