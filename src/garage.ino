@@ -62,7 +62,7 @@ pin_t MAXSONAR_TRIGGERPIN = D0;
 pin_t MAXSONAR_ECHOPIN = D1;
 Maxsonar maxsonar = Maxsonar(MAXSONAR_TRIGGERPIN, MAXSONAR_ECHOPIN);
 
-const int filterSize = 100;
+const int filterSize = 25;
 MedianFilter filter = MedianFilter(filterSize, 0);
 int cm = 0;
 int openDoorThreshold = 20;  // distances below this indicate open door
@@ -133,12 +133,29 @@ void setup() {
 
   Blynk.begin(auth);
 
-  mqtt_connect("photon1", "garage/door/sensor", "offline");
-  mqtt_pub("garage/door/sensor", "online");
+  mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
+
+  mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+  mqtt_pub("home/sensor/parking1_distance/config", "{\"name\": \"parking1_distance\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+  mqtt_pub("home/binary_sensor/parking1/config", "{\"name\": \"parking1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+
+  mqtt_pub("home/device/photon_garage/available", "online");
 
   measureTimer.start();
   reportTimer.start();
 }
+
+// home/device/photon_garage/available
+
+// home/cover/garage_door/config {"name": "garage_door", "availability_topic": "home/device/photon_garage/available"}
+// home/cover/garage_door/state open|closed
+
+// home/sensor/parking1_distance/config {"name": "Vincci's Parking Spot Distance", "unit_of_measurement": "cm", "availability_topic": "home/device/photon_garage/available"}
+// home/sensor/parking1_distance/state 55
+
+// home/binary_sensor/parking1/config {"name": "Vincci's Parking Spot", "device_class":"occupancy", "icon": "mdi:car", "availability_topic": "home/device/photon_garage/available"}
+// home/binary_sensor/parking1/state on|off
+
 
 void loop() {
 
@@ -170,12 +187,12 @@ void measure() {
   }
 
   if (new_state == OPEN && state != OPEN) {
-    mqtt_pub("garage/door/state", "open");
+    mqtt_pub("home/cover/garage_door/state", "open");
     openSince = millis();
     digitalWrite(ONBOARD_LED, HIGH);
     state = OPEN;
   } else if (new_state == CLOSED && state != CLOSED) {
-    mqtt_pub("garage/door/state", "closed");
+    mqtt_pub("home/cover/garage_door/state", "closed");
     digitalWrite(ONBOARD_LED, LOW);
     state = CLOSED;
   }
@@ -184,7 +201,7 @@ void measure() {
 void report() {
   if (cm != lastReportedCm) {
     Blynk.virtualWrite(V0, cm);
-    mqtt_pub("garage/door/distance", cm);
+    mqtt_pub("home/sensor/parking1_distance/state", cm);
     lastReportedCm = cm;
   }
 
