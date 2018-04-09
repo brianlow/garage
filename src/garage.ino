@@ -1,19 +1,27 @@
 // HA with SSL
-// add 2nd parking sensor
-
+// add 3rd parking sensor
 
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
  * Particle - HC-SR04
  *      GND - GND
  *      VIN - VCC
+ *       D0 - TRIG
+ *       D1 - ECHO
+ *
+ * HC-SR04 Ping / Range finder wiring:
+ * -----------------------------------
+ * Particle - HC-SR04
+ *      GND - GND
+ *      VIN - VCC
  *       D2 - TRIG
- *       D6 - ECHO
+ *       D3 - ECHO
  * *
  */
 
 #include "application.h"
 #include "sr04.h"
+#include "sensor.h"
 #include "median_filter.h"
 #include "secrets.h"
 #include <blynk.h>
@@ -26,28 +34,14 @@ WidgetTerminal terminal(V2);
 // Onboard Led
 int ONBOARD_LED = D7;
 
-// SR04 Sensor
-pin_t SR04_TRIGGERPIN = D2;
-pin_t SR04_ECHOPIN = D6;
-SR04 sr04 = SR04(SR04_TRIGGERPIN, SR04_ECHOPIN);
+pin_t DOOR_TRIGGERPIN = D0;
+pin_t DOOR_ECHOPIN = D1;
+Sensor door = Sensor(DOOR_TRIGGERPIN, DOOR_ECHOPIN, 0, 20);
 
-const int filterSize = 25;
-MedianFilter filter = MedianFilter(filterSize, 0);
-int cm = 0;
-int openDoorThreshold = 20;  // distances below this indicate open door
-int parkingOccupiedThreshold = 260; // distance below this indicates car is present
-int readings = 0; // number of readings we've taken (only counts up to filterSize)
+pin_t STALL1_TRIGGERPIN = D2;
+pin_t STALL1_ECHOPIN = D3;
+Sensor stall1 = Sensor(STALL1_TRIGGERPIN, STALL1_ECHOPIN, 20, 220);
 
-const int CLOSED = -1;
-const int UNKNOWN = 0;
-const int OPEN = 1;
-int state = UNKNOWN;
-
-const int EMPTY = -1;
-const int OCCUPIED = 1;
-int parking_state = UNKNOWN;
-
-int lastReportedCm = 0;
 char stringBuffer[25] = "";
 
 bool measureFlag;
@@ -70,25 +64,23 @@ void mqtt_connect(String name, String willTopic, String willMessage) {
   mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
 }
 
-void mqtt_pub(char* topic, char* message) {
+void mqtt_pub(char* topic, const char* message) {
   bool retain = true;
   if (mqtt.isConnected()) {
     mqtt.publish(topic, (uint8_t*)message, strlen(message), retain);
   }
 }
-void mqtt_pub(char* topic, int) {
+void mqtt_pub(char* topic, int cm) {
   sprintf(stringBuffer, "%d", cm);
   mqtt_pub(topic, stringBuffer);
 }
 
 void setup() {
-  sr04.init();
+  door.init();
+  stall1.init();
 
   pinMode(ONBOARD_LED, OUTPUT);
   digitalWrite(ONBOARD_LED, LOW);
-
-  Particle.variable("cm", cm);
-  Particle.variable("state", state);
 
   delay(250);
 
@@ -97,6 +89,7 @@ void setup() {
   mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
 
   mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+  mqtt_pub("home/sensor/garage_door/config", "{\"name\": \"garage_door\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
   mqtt_pub("home/sensor/stall1/config", "{\"name\": \"stall1\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
   mqtt_pub("home/binary_sensor/stall1/config", "{\"name\": \"stall1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
 
@@ -113,65 +106,39 @@ void loop() {
 
   if (measureFlag) {
     measureFlag = false;
-    measure();
-    calculate_door();
-    calculate_parking();
+    door.measure();
+    stall1.measure();
   }
 
   if (reportFlag) {
     reportFlag = false;
-    report();
+    reportDoor();
+    reportStall1();
   }
 }
 
-void measure() {
-  float rawCm = sr04.ping();
+void reportDoor() {
+  if (door.cmChanged) {
+    Blynk.virtualWrite(V0, door.cm);
+    mqtt_pub("home/sensor/garage_door/state", door.cm);
+  }
 
-  cm = filter.in(rawCm);
+  if (door.stateChanged && door.state != Sensor::UNKNOWN) {
+    mqtt_pub("home/cover/garage_door/state", (door.state == Sensor::ON ? "open" : "closed"));
+  }
+
+  door.clearChanged();
 }
 
-void calculate_door() {
-  int new_state;
-  if (readings < filterSize) {
-    readings++;
-    new_state = UNKNOWN;
-  } else {
-    new_state = cm < openDoorThreshold ? OPEN : CLOSED;
+void reportStall1() {
+  if (stall1.cmChanged) {
+    Blynk.virtualWrite(V0, stall1.cm);
+    mqtt_pub("home/sensor/stall1/state", stall1.cm);
   }
 
-  if (new_state == OPEN && state != OPEN) {
-    mqtt_pub("home/cover/garage_door/state", "open");
-    digitalWrite(ONBOARD_LED, HIGH);
-    state = OPEN;
-  } else if (new_state == CLOSED && state != CLOSED) {
-    mqtt_pub("home/cover/garage_door/state", "closed");
-    digitalWrite(ONBOARD_LED, LOW);
-    state = CLOSED;
-  }
-}
-
-void calculate_parking() {
-  int new_state;
-  if (readings < filterSize || state == OPEN) {
-    readings++;
-    new_state = UNKNOWN;
-  } else {
-    new_state = cm < parkingOccupiedThreshold ? OCCUPIED : EMPTY;
+  if (stall1.stateChanged && stall1.state != Sensor::UNKNOWN) {
+    mqtt_pub("home/binary_sensor/stall1/state", (stall1.state == Sensor::ON ? "ON" : "OFF"));
   }
 
-  if (new_state == OCCUPIED && parking_state != OCCUPIED) {
-    mqtt_pub("home/binary_sensor/stall1/state", "ON");
-    parking_state = OPEN;
-  } else if (new_state == EMPTY && parking_state != EMPTY) {
-    mqtt_pub("home/binary_sensor/stall1/state", "OFF");
-    parking_state = CLOSED;
-  }
-}
-
-void report() {
-  if (cm != lastReportedCm) {
-    Blynk.virtualWrite(V0, cm);
-    mqtt_pub("home/sensor/stall1/state", cm);
-    lastReportedCm = cm;
-  }
+  stall1.clearChanged();
 }
