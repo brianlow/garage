@@ -13,6 +13,7 @@ class SR04 {
   private:
     pin_t triggerPin;
     pin_t echoPin;
+    unsigned long pulseInWithTimeout(int pin, int value, int timeout);
 };
 
 #endif // __SR04__
