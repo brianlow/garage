@@ -36,13 +36,23 @@ int ONBOARD_LED = D7;
 
 pin_t DOOR_TRIGGERPIN = D0;
 pin_t DOOR_ECHOPIN = D1;
-Sensor door = Sensor(DOOR_TRIGGERPIN, DOOR_ECHOPIN, 0, 20);
+Sensor door = Sensor(DOOR_TRIGGERPIN, DOOR_ECHOPIN, 0, 45);
 
 pin_t STALL1_TRIGGERPIN = D2;
 pin_t STALL1_ECHOPIN = D3;
-Sensor stall1 = Sensor(STALL1_TRIGGERPIN, STALL1_ECHOPIN, 20, 220);
+Sensor stall1 = Sensor(STALL1_TRIGGERPIN, STALL1_ECHOPIN, 45, 200);
+
+pin_t STALL2_TRIGGERPIN = D4;
+pin_t STALL2_ECHOPIN = D5;
+Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
 
 char stringBuffer[25] = "";
+
+bool reconnectFlag;
+void setReconnectFlag() {
+  reconnectFlag = true;
+}
+Timer reconnectTimer(5000L, setReconnectFlag);
 
 bool measureFlag;
 void setMeasureFlag() {
@@ -78,6 +88,7 @@ void mqtt_pub(char* topic, int cm) {
 void setup() {
   door.init();
   stall1.init();
+  stall2.init();
 
   pinMode(ONBOARD_LED, OUTPUT);
   digitalWrite(ONBOARD_LED, LOW);
@@ -86,15 +97,9 @@ void setup() {
 
   Blynk.begin(auth);
 
-  mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
+  mqtt_reconnect();
 
-  mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-  mqtt_pub("home/sensor/garage_door/config", "{\"name\": \"garage_door\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-  mqtt_pub("home/sensor/stall1/config", "{\"name\": \"stall1\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-  mqtt_pub("home/binary_sensor/stall1/config", "{\"name\": \"stall1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-
-  mqtt_pub("home/device/photon_garage/available", "online");
-
+  reconnectTimer.start();
   measureTimer.start();
   reportTimer.start();
 }
@@ -104,16 +109,40 @@ void loop() {
   Blynk.run();
   mqtt.loop();
 
+  if (reconnectFlag) {
+    reconnectFlag = false;
+    mqtt_reconnect();
+  }
+
   if (measureFlag) {
     measureFlag = false;
     door.measure();
     stall1.measure();
+    stall2.measure();
   }
 
   if (reportFlag) {
     reportFlag = false;
     reportDoor();
     reportStall1();
+    reportStall2();
+  }
+}
+
+void mqtt_reconnect() {
+  if (!mqtt.isConnected()) {
+    Particle.publish("mqtt-reconnect");
+
+    mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
+
+    mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+    mqtt_pub("home/sensor/garage_door/config", "{\"name\": \"garage_door\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+    mqtt_pub("home/sensor/stall1/config", "{\"name\": \"stall1\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+    mqtt_pub("home/binary_sensor/stall1/config", "{\"name\": \"stall1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+    mqtt_pub("home/sensor/stall2/config", "{\"name\": \"stall2\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+    mqtt_pub("home/binary_sensor/stall2/config", "{\"name\": \"stall2\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
+
+    mqtt_pub("home/device/photon_garage/available", "online");
   }
 }
 
@@ -132,7 +161,7 @@ void reportDoor() {
 
 void reportStall1() {
   if (stall1.cmChanged) {
-    Blynk.virtualWrite(V0, stall1.cm);
+    Blynk.virtualWrite(V1, stall1.cm);
     mqtt_pub("home/sensor/stall1/state", stall1.cm);
   }
 
@@ -141,4 +170,17 @@ void reportStall1() {
   }
 
   stall1.clearChanged();
+}
+
+void reportStall2() {
+  if (stall2.cmChanged) {
+    Blynk.virtualWrite(V2, stall2.cm);
+    mqtt_pub("home/sensor/stall2/state", stall2.cm);
+  }
+
+  if (stall2.stateChanged && stall2.state != Sensor::UNKNOWN) {
+    mqtt_pub("home/binary_sensor/stall2/state", (stall2.state == Sensor::ON ? "ON" : "OFF"));
+  }
+
+  stall2.clearChanged();
 }

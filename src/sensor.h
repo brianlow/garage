@@ -17,7 +17,7 @@ class Sensor {
     const static int UNKNOWN = 0;
     const static int ON = 1;
 
-    int cm = 0;
+    int cm = -1;
     int state = UNKNOWN;
     bool cmChanged = false;
     bool stateChanged = false;
@@ -28,7 +28,7 @@ class Sensor {
     int minCm;
     int maxCm;
 
-    const int filterSize = 50;
+    const int filterSize = 100;
     int readings = 0; // number of readings we've taken (only counts up to filterSize)
     MedianFilter filter = MedianFilter(filterSize, 0);
 };
