@@ -15,6 +15,15 @@
  *      VIN - VCC
  *       D2 - TRIG
  *       D3 - ECHO
+ *
+ *
+ * HC-SR04 Ping / Range finder wiring:
+ * -----------------------------------
+ * Particle - HC-SR04
+ *      GND - GND
+ *      VIN - VCC
+ *       D4 - TRIG
+ *       D5 - ECHO
  * *
  */
 
@@ -23,6 +32,7 @@
 #include "sensor.h"
 #include "median_filter.h"
 #include "secrets.h"
+#include "non_blocking_timer.h"
 #include <blynk.h>
 #include <MQTT.h>
 
@@ -44,29 +54,28 @@ Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
 
 char stringBuffer[25] = "";
 
-bool reconnectFlag;
-void setReconnectFlag() {
-  reconnectFlag = true;
+void measure() {
+  door.measure();
+  stall1.measure();
+  stall2.measure();
 }
-Timer reconnectTimer(5000L, setReconnectFlag);
 
-bool measureFlag;
-void setMeasureFlag() {
-  measureFlag = true;
+void report() {
+  reportDoor();
+  reportStall1();
+  reportStall2();
 }
-Timer measureTimer(50, setMeasureFlag);
 
-bool reportFlag;
-void setReportFlag() {
-  reportFlag = true;
+void reReport() {
+  door.setChanged();
+  stall1.setChanged();
+  stall2.setChanged();
 }
-Timer reportTimer(500L, setReportFlag);
 
-bool reReportFlag;
-void setReReportFlag() {
-  reReportFlag = true;
-}
-Timer reReportTimer(1000 * 60 * 60, setReReportFlag);
+NonBlockingTimer reconnectTimer(5000L, mqtt_reconnect);
+NonBlockingTimer measureTimer(50, measure);
+NonBlockingTimer reportTimer(500L, report);
+NonBlockingTimer reReportTimer(1000 * 60 * 60, reReport);
 
 void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
@@ -103,31 +112,10 @@ void loop() {
   Blynk.run();
   mqtt.loop();
 
-  if (reconnectFlag) {
-    reconnectFlag = false;
-    mqtt_reconnect();
-  }
-
-  if (measureFlag) {
-    measureFlag = false;
-    door.measure();
-    stall1.measure();
-    stall2.measure();
-  }
-
-  if (reportFlag) {
-    reportFlag = false;
-    reportDoor();
-    reportStall1();
-    reportStall2();
-  }
-
-  if (reReportFlag) {
-    reReportFlag = false;
-    door.setChanged();
-    stall1.setChanged();
-    stall2.setChanged();
-  }
+  reconnectTimer.loop();
+  measureTimer.loop();
+  reportTimer.loop();
+  reReportTimer.loop();
 }
 
 void mqtt_reconnect() {
