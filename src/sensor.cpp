@@ -21,7 +21,7 @@ void Sensor::measure()
     return;
   }
 
-  if (newCm != cm) {
+  if (newCm != cm && (abs(cm - newCm) >= 2)) {
     cm = newCm;
     cmChanged = true;
   }
@@ -37,4 +37,9 @@ void Sensor::measure()
 void Sensor::clearChanged() {
   cmChanged = false;
   stateChanged = false;
+}
+
+void Sensor::setChanged() {
+  cmChanged = true;
+  stateChanged = true;
 }

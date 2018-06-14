@@ -1,5 +1,4 @@
 // HA with SSL
-// add 3rd parking sensor
 
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
@@ -30,9 +29,6 @@
 // Blynk
 char auth[] = BLYNK_AUTH;
 WidgetTerminal terminal(V2);
-
-// Onboard Led
-int ONBOARD_LED = D7;
 
 pin_t DOOR_TRIGGERPIN = D0;
 pin_t DOOR_ECHOPIN = D1;
@@ -66,6 +62,12 @@ void setReportFlag() {
 }
 Timer reportTimer(500L, setReportFlag);
 
+bool reReportFlag;
+void setReReportFlag() {
+  reReportFlag = true;
+}
+Timer reReportTimer(1000 * 60 * 60, setReReportFlag);
+
 void mqtt_receive(char* topic, byte* payload, unsigned int length);
 void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
@@ -89,16 +91,8 @@ void setup() {
   door.init();
   stall1.init();
   stall2.init();
-
-  pinMode(ONBOARD_LED, OUTPUT);
-  digitalWrite(ONBOARD_LED, LOW);
-
-  delay(250);
-
   Blynk.begin(auth);
-
   mqtt_reconnect();
-
   reconnectTimer.start();
   measureTimer.start();
   reportTimer.start();
@@ -126,6 +120,13 @@ void loop() {
     reportDoor();
     reportStall1();
     reportStall2();
+  }
+
+  if (reReportFlag) {
+    reReportFlag = false;
+    door.setChanged();
+    stall1.setChanged();
+    stall2.setChanged();
   }
 }
 
