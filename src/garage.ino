@@ -82,7 +82,13 @@ void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
 MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
 
 void mqtt_connect(String name, String willTopic, String willMessage) {
-  mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
+  Particle.publish("mqtt", "connecting");
+  bool connected = mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
+  if (connected) {
+    Particle.publish("mqtt", "connected");
+  } else {
+    Particle.publish("mqtt", "connect failed");
+  }
 }
 
 void mqtt_pub(char* topic, const char* message) {
@@ -97,6 +103,8 @@ void mqtt_pub(char* topic, int cm) {
 }
 
 void setup() {
+  // WiFi.selectAntenna(ANT_EXTERNAL);
+
   door.init();
   stall1.init();
   stall2.init();
@@ -120,8 +128,6 @@ void loop() {
 
 void mqtt_reconnect() {
   if (!mqtt.isConnected()) {
-    Particle.publish("mqtt-reconnect");
-
     mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
 
     mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
