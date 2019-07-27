@@ -1,5 +1,3 @@
-// HA with SSL
-
 /* HC-SR04 Ping / Range finder wiring:
  * -----------------------------------
  * Particle - HC-SR04
@@ -34,7 +32,6 @@
 #include "secrets.h"
 #include "non_blocking_timer.h"
 #include <blynk.h>
-#include <MQTT.h>
 
 // Blynk
 char auth[] = BLYNK_AUTH;
@@ -52,7 +49,7 @@ pin_t STALL2_TRIGGERPIN = D4;
 pin_t STALL2_ECHOPIN = D5;
 Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
 
-char stringBuffer[25] = "";
+char stringBuffer[200] = "";
 
 void measure() {
   door.measure();
@@ -61,9 +58,45 @@ void measure() {
 }
 
 void report() {
-  reportDoor();
-  reportStall1();
-  reportStall2();
+  if (door.stateChanged || stall1.stateChanged || stall2.stateChanged) {
+    Blynk.virtualWrite(V0, door.cm);
+    Blynk.virtualWrite(V1, stall1.cm);
+    Blynk.virtualWrite(V2, stall2.cm);
+
+    char doorState[25] = "";
+    if (door.state == Sensor::ON) {
+      strcpy(doorState, "open");
+    } else if (door.state == Sensor::OFF) {
+      strcpy(doorState, "closed");
+    } else {
+      strcpy(doorState, "unknown");
+    }
+
+    char stall1State[25] = "";
+    if (stall1.state == Sensor::ON) {
+      strcpy(stall1State, "present");
+    } else if (stall1.state == Sensor::OFF) {
+      strcpy(stall1State, "not present");
+    } else {
+      strcpy(stall1State, "unknown");
+    }
+
+    char stall2State[25] = "";
+    if (stall2.state == Sensor::ON) {
+      strcpy(stall2State, "present");
+    } else if (stall2.state == Sensor::OFF) {
+      strcpy(stall2State, "not present");
+    } else {
+      strcpy(stall2State, "unknown");
+    }
+
+    sprintf(stringBuffer, "{\"door\":\"%s\",\"stall1\":\"%s\",\"stall2\":\"%s\"}", doorState, stall1State, stall2State);
+    Particle.publish("state-update", stringBuffer, 60, PRIVATE);
+
+    door.clearChanged();
+    stall1.clearChanged();
+    stall2.clearChanged();
+  }
 }
 
 void reReport() {
@@ -72,35 +105,9 @@ void reReport() {
   stall2.setChanged();
 }
 
-NonBlockingTimer reconnectTimer(5000L, mqtt_reconnect);
 NonBlockingTimer measureTimer(50, measure);
 NonBlockingTimer reportTimer(500L, report);
 NonBlockingTimer reReportTimer(1000 * 60 * 60, reReport);
-
-void mqtt_receive(char* topic, byte* payload, unsigned int length);
-void mqtt_receive(char* topic, byte* payload, unsigned int length) {};
-MQTT mqtt(MQTT_SERVER, 1883, mqtt_receive);
-
-void mqtt_connect(String name, String willTopic, String willMessage) {
-  Particle.publish("mqtt", "connecting");
-  bool connected = mqtt.connect(name, NULL, NULL, willTopic, MQTT::QOS0, true, willMessage, true);
-  if (connected) {
-    Particle.publish("mqtt", "connected");
-  } else {
-    Particle.publish("mqtt", "connect failed");
-  }
-}
-
-void mqtt_pub(char* topic, const char* message) {
-  bool retain = true;
-  if (mqtt.isConnected()) {
-    mqtt.publish(topic, (uint8_t*)message, strlen(message), retain);
-  }
-}
-void mqtt_pub(char* topic, int cm) {
-  sprintf(stringBuffer, "%d", cm);
-  mqtt_pub(topic, stringBuffer);
-}
 
 void setup() {
   // WiFi.selectAntenna(ANT_EXTERNAL);
@@ -109,73 +116,16 @@ void setup() {
   stall1.init();
   stall2.init();
   Blynk.begin(auth);
-  mqtt_reconnect();
-  reconnectTimer.start();
   measureTimer.start();
   reportTimer.start();
+  reReportTimer.start();
 }
 
 void loop() {
 
   Blynk.run();
-  mqtt.loop();
-
-  reconnectTimer.loop();
+  
   measureTimer.loop();
   reportTimer.loop();
   reReportTimer.loop();
-}
-
-void mqtt_reconnect() {
-  if (!mqtt.isConnected()) {
-    mqtt_connect("photon1", "home/device/photon_garage/available", "offline");
-
-    mqtt_pub("home/cover/garage_door/config", "{\"name\": \"garage_door\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-    mqtt_pub("home/sensor/garage_door/config", "{\"name\": \"garage_door\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-    mqtt_pub("home/sensor/stall1/config", "{\"name\": \"stall1\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-    mqtt_pub("home/binary_sensor/stall1/config", "{\"name\": \"stall1\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-    mqtt_pub("home/sensor/stall2/config", "{\"name\": \"stall2\", \"unit_of_measurement\": \"cm\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-    mqtt_pub("home/binary_sensor/stall2/config", "{\"name\": \"stall2\", \"device_class\": \"occupancy\", \"availability_topic\": \"home/device/photon_garage/available\"}");
-
-    mqtt_pub("home/device/photon_garage/available", "online");
-  }
-}
-
-void reportDoor() {
-  if (door.cmChanged) {
-    Blynk.virtualWrite(V0, door.cm);
-    mqtt_pub("home/sensor/garage_door/state", door.cm);
-  }
-
-  if (door.stateChanged && door.state != Sensor::UNKNOWN) {
-    mqtt_pub("home/cover/garage_door/state", (door.state == Sensor::ON ? "open" : "closed"));
-  }
-
-  door.clearChanged();
-}
-
-void reportStall1() {
-  if (stall1.cmChanged) {
-    Blynk.virtualWrite(V1, stall1.cm);
-    mqtt_pub("home/sensor/stall1/state", stall1.cm);
-  }
-
-  if (stall1.stateChanged && stall1.state != Sensor::UNKNOWN) {
-    mqtt_pub("home/binary_sensor/stall1/state", (stall1.state == Sensor::ON ? "ON" : "OFF"));
-  }
-
-  stall1.clearChanged();
-}
-
-void reportStall2() {
-  if (stall2.cmChanged) {
-    Blynk.virtualWrite(V2, stall2.cm);
-    mqtt_pub("home/sensor/stall2/state", stall2.cm);
-  }
-
-  if (stall2.stateChanged && stall2.state != Sensor::UNKNOWN) {
-    mqtt_pub("home/binary_sensor/stall2/state", (stall2.state == Sensor::ON ? "ON" : "OFF"));
-  }
-
-  stall2.clearChanged();
 }
