@@ -31,11 +31,6 @@
 #include "median_filter.h"
 #include "secrets.h"
 #include "non_blocking_timer.h"
-#include <blynk.h>
-
-// Blynk
-char auth[] = BLYNK_AUTH;
-WidgetTerminal terminal(V2);
 
 pin_t DOOR_TRIGGERPIN = D0;
 pin_t DOOR_ECHOPIN = D1;
@@ -59,9 +54,6 @@ void measure() {
 
 void report() {
   if (door.stateChanged || stall1.stateChanged || stall2.stateChanged) {
-    Blynk.virtualWrite(V0, door.cm);
-    Blynk.virtualWrite(V1, stall1.cm);
-    Blynk.virtualWrite(V2, stall2.cm);
 
     char doorState[25] = "";
     if (door.state == Sensor::ON) {
@@ -115,16 +107,12 @@ void setup() {
   door.init();
   stall1.init();
   stall2.init();
-  Blynk.begin(auth);
   measureTimer.start();
   reportTimer.start();
   reReportTimer.start();
 }
 
 void loop() {
-
-  Blynk.run();
-  
   measureTimer.loop();
   reportTimer.loop();
   reReportTimer.loop();
