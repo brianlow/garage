@@ -8,20 +8,26 @@
 class Sensor {
 
   public:
-    Sensor(pin_t trigger, pin_t echo, int minCm, int maxCm);
+    Sensor(pin_t trigger, pin_t echo, int minCm, int maxCm, int type);
     void init();
     void measure();
     void clearChanged();
     void setChanged();
+    char[] stateName();
 
     const static int OFF = -1;
     const static int UNKNOWN = 0;
     const static int ON = 1;
 
+    const static int CONTACT = 1;
+    const static int PRESENCE = 2;
+
     int cm = -1;
     int state = UNKNOWN;
+    bool changed = false;
     bool cmChanged = false;
     bool stateChanged = false;
+    int type = CONTACT;
 
   private:
     SR04 sr04;

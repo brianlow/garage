@@ -25,6 +25,7 @@
  * *
  */
 
+#include "ArduinoJson.h"
 #include "application.h"
 #include "sr04.h"
 #include "sensor.h"
@@ -45,6 +46,8 @@ pin_t STALL2_ECHOPIN = D5;
 Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
 
 char stringBuffer[200] = "";
+StaticJsonDocument<200> doc;
+
 
 void measure() {
   door.measure();
@@ -53,7 +56,7 @@ void measure() {
 }
 
 void report() {
-  if (door.stateChanged || stall1.stateChanged || stall2.stateChanged) {
+  if (door.changed || stall1.changed || stall2.changed) {
 
     char doorState[25] = "";
     if (door.state == Sensor::ON) {
@@ -82,7 +85,15 @@ void report() {
       strcpy(stall2State, "unknown");
     }
 
-    sprintf(stringBuffer, "{\"door\":\"%s\",\"stall1\":\"%s\",\"stall2\":\"%s\"}", doorState, stall1State, stall2State);
+    doc["door"] = doorState;
+    doc["doorCm"] = door.cm;
+    doc["stall1"] = stall1State;
+    doc["stall1Cm"] = stall1.cm;
+    doc["stall2"] = stall2State;
+    doc["stall2Cm"] = stall2.cm;
+    serializeJson(doc, stringBuffer);
+
+    //sprintf(stringBuffer, "{\"door\":\"%s\",\"stall1\":\"%s\",\"stall2\":\"%s\"}", doorState, stall1State, stall2State);
     Particle.publish("state-update", stringBuffer, 60, PRIVATE);
 
     door.clearChanged();
