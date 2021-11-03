@@ -1,3 +1,4 @@
 **/*.bin
 src/secrets.h
 .vscode
+target
