@@ -121,6 +121,8 @@ void setup() {
   measureTimer.start();
   reportTimer.start();
   reReportTimer.start();
+
+  Particle.function("reReport", reReport);
 }
 
 void loop() {
