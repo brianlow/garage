@@ -41,6 +41,7 @@
 void measure();
 void report();
 void reReport();
+int reportToParticleCloud(String unused);
 void setup();
 void loop();
 #line 36 "/Users/brian/dev/particle/garage/src/garage.ino"
@@ -119,6 +120,11 @@ void reReport() {
   stall2.setChanged();
 }
 
+int reportToParticleCloud(String unused) {
+  reReport();
+  return 0;
+}
+
 NonBlockingTimer measureTimer(50, measure);
 NonBlockingTimer reportTimer(500L, report);
 NonBlockingTimer reReportTimer(1000 * 60 * 60, reReport);
@@ -133,7 +139,7 @@ void setup() {
   reportTimer.start();
   reReportTimer.start();
 
-  Particle.function("reReport", reReport);
+  Particle.function("report", reportToParticleCloud);
 }
 
 void loop() {
