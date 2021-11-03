@@ -15,7 +15,7 @@ void SR04::init()
 
 uint32_t SR04::ping()
 {
-  uint32_t duration, inches, cm;
+  uint32_t duration, cm;
 
   /* Trigger the sensor by sending a HIGH pulse of 10 or more microseconds */
   digitalWriteFast(triggerPin, HIGH);
@@ -28,7 +28,6 @@ uint32_t SR04::ping()
   // Sound travels at 1130 ft/s (73.746 us/inch)
   // or 340 m/s (29 us/cm), out and back so divide by 2
   // Ref: http://www.parallax.com/dl/docs/prod/acc/28015-PING-v1.3.pdf
-  inches = duration / 74 / 2;
   cm = duration / 29 / 2;
 
   return cm;
