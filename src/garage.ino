@@ -101,10 +101,6 @@ void report() {
     writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0; // null terminate
     Particle.publish("state-update", stringBuffer);
 
-    doorFeed.send(door.cm);
-    stall1Feed.send(stall1.cm);
-    stall2Feed.send(stall2.cm);
-
     door.clearChanged();
     stall1.clearChanged();
     stall2.clearChanged();
@@ -122,9 +118,16 @@ int reportToParticleCloud(String unused) {
   return 0;
 }
 
+void reportToAdafruit() {
+  doorFeed.send(door.cm);
+  stall1Feed.send(stall1.cm);
+  stall2Feed.send(stall2.cm);
+}
+
 NonBlockingTimer measureTimer(50, measure);
 NonBlockingTimer reportTimer(500L, report);
 NonBlockingTimer reReportTimer(1000 * 60 * 60, reReport);
+NonBlockingTimer reportToAdafruitTimer(1000 * 15, reportToAdafruit);
 
 void setup() {
   // WiFi.selectAntenna(ANT_EXTERNAL);
@@ -135,6 +138,7 @@ void setup() {
   measureTimer.start();
   reportTimer.start();
   reReportTimer.start();
+  reportToAdafruitTimer.start();
 
   Particle.function("report", reportToParticleCloud);
 
@@ -145,4 +149,5 @@ void loop() {
   measureTimer.loop();
   reportTimer.loop();
   reReportTimer.loop();
+  reportToAdafruitTimer.loop();
 }
