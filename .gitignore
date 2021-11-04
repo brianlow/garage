@@ -2,3 +2,4 @@
 src/secrets.h
 .vscode
 target
+lib

@@ -31,6 +31,7 @@
 #include "median_filter.h"
 #include "secrets.h"
 #include "non_blocking_timer.h"
+#include "Adafruit_IO_Client.h"
 
 pin_t DOOR_TRIGGERPIN = D0;
 pin_t DOOR_ECHOPIN = D1;
@@ -43,6 +44,12 @@ Sensor stall1 = Sensor(STALL1_TRIGGERPIN, STALL1_ECHOPIN, 45, 200);
 pin_t STALL2_TRIGGERPIN = D4;
 pin_t STALL2_ECHOPIN = D5;
 Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
+
+TCPClient client;
+Adafruit_IO_Client adafruit = Adafruit_IO_Client(client, IO_KEY);
+Adafruit_IO_Feed doorFeed = adafruit.getFeed("garage-door");
+Adafruit_IO_Feed stall1Feed = adafruit.getFeed("garage-stall-1");
+Adafruit_IO_Feed stall2Feed = adafruit.getFeed("garage-stall-2");
 
 char stringBuffer[200] = "";
 
@@ -94,6 +101,10 @@ void report() {
     writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0; // null terminate
     Particle.publish("state-update", stringBuffer);
 
+    doorFeed.send(door.cm);
+    stall1Feed.send(stall1.cm);
+    stall2Feed.send(stall2.cm);
+
     door.clearChanged();
     stall1.clearChanged();
     stall2.clearChanged();
@@ -126,6 +137,8 @@ void setup() {
   reReportTimer.start();
 
   Particle.function("report", reportToParticleCloud);
+
+  adafruit.begin();
 }
 
 void loop() {
