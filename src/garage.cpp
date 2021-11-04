@@ -30,7 +30,6 @@
  * *
  */
 
-#include "ArduinoJson.h"
 #include "application.h"
 #include "sr04.h"
 #include "sensor.h"
@@ -44,7 +43,7 @@ void reReport();
 int reportToParticleCloud(String unused);
 void setup();
 void loop();
-#line 36 "/Users/brian/dev/particle/garage/src/garage.ino"
+#line 35 "/Users/brian/dev/particle/garage/src/garage.ino"
 pin_t DOOR_TRIGGERPIN = D0;
 pin_t DOOR_ECHOPIN = D1;
 Sensor door = Sensor(DOOR_TRIGGERPIN, DOOR_ECHOPIN, 0, 45);
@@ -58,8 +57,6 @@ pin_t STALL2_ECHOPIN = D5;
 Sensor stall2 = Sensor(STALL2_TRIGGERPIN, STALL2_ECHOPIN, 45, 200);
 
 char stringBuffer[200] = "";
-StaticJsonDocument<200> doc;
-
 
 void measure() {
   door.measure();
@@ -97,16 +94,17 @@ void report() {
       strcpy(stall2State, "unknown");
     }
 
-    doc["door"] = doorState;
-    doc["doorCm"] = door.cm;
-    doc["stall1"] = stall1State;
-    doc["stall1Cm"] = stall1.cm;
-    doc["stall2"] = stall2State;
-    doc["stall2Cm"] = stall2.cm;
-    serializeJson(doc, stringBuffer);
-
-    //sprintf(stringBuffer, "{\"door\":\"%s\",\"stall1\":\"%s\",\"stall2\":\"%s\"}", doorState, stall1State, stall2State);
-    Particle.publish("state-update", stringBuffer, 60, PRIVATE);
+    JSONBufferWriter writer(stringBuffer, sizeof(stringBuffer));
+    writer.beginObject();
+        writer.name("door").value(doorState);
+        writer.name("doorCm").value(door.cm);
+        writer.name("stall1").value(stall1State);
+        writer.name("stall1Cm").value(stall1.cm);
+        writer.name("stall2").value(stall2State);
+        writer.name("stall2Cm").value(stall2.cm);
+    writer.endObject();
+    writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0; // null terminate
+    Particle.publish("state-update", stringBuffer);
 
     door.clearChanged();
     stall1.clearChanged();
