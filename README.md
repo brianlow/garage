@@ -23,4 +23,5 @@ open the particle terminal (upper right when viewing an .ino file)
 
 ## Troubleshooting
 
-Use the `report` Particle cloud function to see latest measurements in the Particle Console
+* Use the `report` Particle cloud function to see latest measurements in the Particle Console
+* See measurement history at https://io.adafruit.com/brian22/dashboards/garage
