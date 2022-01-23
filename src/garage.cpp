@@ -67,7 +67,7 @@ Adafruit_IO_Feed stall2Feed = adafruit.getFeed("garage-stall-2");
 char stringBuffer[200] = "";
 
 void measure() {
-  door.measure();
+  // door.measure();
   stall1.measure();
   stall2.measure();
 }
